@@ -1,0 +1,155 @@
+name: Release
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      source_sha: ${{ steps.plan.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha=$(git rev-parse HEAD)
+          latest=$(git tag --list 'v*' --sort=-version:refname | head -n1 || true)
+          if [ -n "$latest" ] && [ -z "$(git rev-list "$latest..HEAD" -- . ':(exclude)Cargo.toml' ':(exclude)Cargo.lock')" ]; then
+            echo 'release=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          datepart=$(TZ=Asia/Hong_Kong date +%Y.%-m%d)
+          rev=-1
+          while IFS= read -r tag; do
+            n=${tag##*.}; case "$n" in ''|*[!0-9]*) continue;; esac
+            [ "$n" -gt "$rev" ] && rev=$n
+          done < <(git tag --list "v$datepart.*")
+          rev=$((rev + 1)); version="$datepart.$rev"; tag="v$version"
+          echo 'release=true' >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+      - if: steps.plan.outputs.release == 'true'
+        run: |
+          python3 - <<'PY'
+          import os, re
+          p = 'Cargo.toml'; s = open(p).read()
+          s, n = re.subn(r'(?m)^(version = ")[^"]+("\s*)$', rf'\g<1>{os.environ["VERSION"]}\2', s, count=1)
+          assert n == 1
+          open(p, 'w').write(s)
+          PY
+          cargo check --locked || cargo check
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+      - if: steps.plan.outputs.release == 'true'
+        uses: dtolnay/rust-toolchain@1.89.0
+        with:
+          components: rustfmt, clippy
+      - if: steps.plan.outputs.release == 'true'
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+          cargo test --locked --all-targets --all-features
+      - if: steps.plan.outputs.release == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-source
+          path: |
+            Cargo.toml
+            Cargo.lock
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.release == 'true'
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            source: jev.exe
+            asset: jev-windows-x86_64.exe
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            source: jev
+            asset: jev-linux-x86_64
+          - os: macos-14
+            target: aarch64-apple-darwin
+            source: jev
+            asset: jev-macos-aarch64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-source
+      - uses: dtolnay/rust-toolchain@1.89.0
+        with:
+          targets: ${{ matrix.target }}
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Stage and checksum
+        shell: bash
+        run: |
+          cp "target/${{ matrix.target }}/release/${{ matrix.source }}" "${{ matrix.asset }}"
+          if command -v sha256sum >/dev/null; then sha256sum "${{ matrix.asset }}" > "${{ matrix.asset }}.sha256"; else shasum -a 256 "${{ matrix.asset }}" > "${{ matrix.asset }}.sha256"; fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.asset }}
+          path: |
+            ${{ matrix.asset }}
+            ${{ matrix.asset }}.sha256
+
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: main
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-source
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: jev-*
+          path: dist
+          merge-multiple: true
+      - name: Commit version and tag
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin main --tags
+          [ "$(git rev-parse origin/main)" = "$SOURCE_SHA" ] || { echo 'main changed during release; aborting safely' >&2; exit 1; }
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add Cargo.toml Cargo.lock
+          git commit -m "release: $TAG"
+          git tag -a "$TAG" -m "Jev CLI $TAG"
+          git push origin HEAD:main "$TAG"
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: gh release create "$TAG" dist/* --title "Jev CLI $TAG" --generate-notes --verify-tag
