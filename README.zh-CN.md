@@ -140,6 +140,8 @@ jev map --preset classify --in lines.txt --each text
 - `--each text`：每行按纯文本字符串作为 state。
 - `--each request`：每行是完整请求体——问题需要逐行变化时用 `jq` 生成。
 
+配合 `--each state` 或 `--each text` 的模板通常直接省略 `state`，因为每行会整体替换它。
+
 单行失败只影响那一行（`{"index":N,"ok":false,"error":{"kind":"api"|"network"|"usage","message":"..."}}`），整批退出码为 `2`。断言逐行生效，任一行为假退出 `3`（行失败仍优先给 `2`）。配合 `--out FILE --resume`，重跑时跳过已完成 `ok` 的行。这是对你自己输出文件的断点续跑，不是缓存——CLI 从不记忆化结果。
 
 重试与限额：429/529 与网络错误按指数退避（500ms 起步、最多 5 次、尊重 `retry_after_ms`），单请求 30 秒超时，`--concurrency` 默认 4（官方约 20 请求/秒；建议不超过 8）。

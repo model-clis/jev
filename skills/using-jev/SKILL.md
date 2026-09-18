@@ -81,7 +81,7 @@ jev ask --preset review-gate --param diff=@pr.diff
 jev map --preset triage --in issues.jsonl --out triaged.jsonl --concurrency 8
 ```
 
-`--each state` (default) makes each JSONL line the request state; `--each text` wraps plain lines as strings; `--each request` treats each line as a complete request body — generate those with `jq` when questions must vary per row. Rows stream out in completion order, each tagged with its input `index`. A failed row fails alone (`{"ok":false,"error":{"kind":"api"|"network"|"usage","message":"..."}}`) and the run exits `2`. With `--out FILE` and `--resume`, a rerun skips rows that already completed `ok` — this is checkpointing, not caching; the CLI itself never memoizes results.
+`--each state` (default) makes each JSONL line the request state; `--each text` wraps plain lines as strings; `--each request` treats each line as a complete request body — generate those with `jq` when questions must vary per row. Templates for `--each state`/`--each text` normally omit `state` entirely, since each line replaces it. Rows stream out in completion order, each tagged with its input `index`. A failed row fails alone (`{"ok":false,"error":{"kind":"api"|"network"|"usage","message":"..."}}`) and the run exits `2`. With `--out FILE` and `--resume`, a rerun skips rows that already completed `ok` — this is checkpointing, not caching; the CLI itself never memoizes results.
 
 ## Writing good questions
 

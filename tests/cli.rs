@@ -232,6 +232,8 @@ async fn ask_applies_params_and_state_override() {
     let requests = jev.server.received_requests().await.unwrap();
     let body: Value = serde_json::from_slice(&requests[0].body).unwrap();
     assert_eq!(body["state"]["issue"]["title"], "it crashes");
+    // The template omits model; the CLI must inject the pinned default.
+    assert_eq!(body["model"], "jev-latest");
     // Reserved keys never reach the wire.
     assert!(body.get("description").is_none());
     assert!(body.get("assert").is_none());

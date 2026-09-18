@@ -144,9 +144,10 @@ fn client() -> Result<api::Client> {
     api::Client::new(key, &base)
 }
 
-async fn execute_single(body: serde_json::Value, assert_src: Option<&str>) -> Result<u8> {
+async fn execute_single(mut body: serde_json::Value, assert_src: Option<&str>) -> Result<u8> {
     let expr = parse_assert(assert_src)?;
     request::validate_ready(&body)?;
+    request::ensure_model(&mut body);
     let outcome = run::single(&client()?, &body, expr.as_ref()).await?;
     println!("{}", outcome.line);
     Ok(outcome.exit_code)
@@ -248,15 +249,14 @@ fn build_row(
     each: Each,
     line: &str,
 ) -> Result<serde_json::Value> {
-    match each {
+    let mut body = match each {
         Each::Request => {
             let value: serde_json::Value =
                 serde_json::from_str(line).map_err(|e| anyhow::anyhow!("not valid JSON: {e}"))?;
             if !value.is_object() {
                 bail!("expected a JSON object request body");
             }
-            request::validate_ready(&value)?;
-            Ok(value)
+            value
         }
         Each::State => {
             let mut body = base.clone().ok_or_else(|| {
@@ -266,18 +266,19 @@ fn build_row(
                 anyhow::anyhow!("not valid JSON (use --each text for plain lines): {e}")
             })?;
             body["state"] = state;
-            request::validate_ready(&body)?;
-            Ok(body)
+            body
         }
         Each::Text => {
             let mut body = base.clone().ok_or_else(|| {
                 anyhow::anyhow!("--each text needs a template (PATH, -, or --preset)")
             })?;
             body["state"] = serde_json::Value::String(line.to_string());
-            request::validate_ready(&body)?;
-            Ok(body)
+            body
         }
-    }
+    };
+    request::validate_ready(&body)?;
+    request::ensure_model(&mut body);
+    Ok(body)
 }
 
 async fn read_input_lines(path: &str) -> Result<Vec<String>> {

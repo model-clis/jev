@@ -140,6 +140,8 @@ jev map --preset classify --in lines.txt --each text
 - `--each text`: each line becomes the state as a plain string.
 - `--each request`: each line is a complete request body — generate lines with `jq` when questions must vary per row.
 
+Templates used with `--each state` or `--each text` normally omit `state` entirely, since each line replaces it.
+
 A failed row fails alone (`{"index":N,"ok":false,"error":{"kind":"api"|"network"|"usage","message":"..."}}`) and the run exits `2`. Assertions apply per row; any false row exits `3` (row failures still take precedence with `2`). With `--out FILE --resume`, a rerun skips rows that already completed `ok`. This is checkpointing of your own output file, not caching — the CLI never memoizes results.
 
 Retries and limits: 429/529 and transport errors back off exponentially (500ms doubling, five retries, honoring `retry_after_ms`), each request times out after 30 seconds, and `--concurrency` defaults to 4 (the API allows roughly 20 requests/second; keep the setting at or below 8).

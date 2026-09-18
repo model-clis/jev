@@ -76,13 +76,24 @@ fn take_string(map: &mut Map<String, Value>, key: &str, label: &str) -> Result<O
     }
 }
 
-/// Full pre-send validation: state present, questions well formed.
+/// Full pre-send validation: state present and non-null, questions well formed.
 pub fn validate_ready(body: &Value) -> Result<()> {
     validate_questions(body, "request")?;
-    if body.get("state").is_none() {
-        bail!("request has no 'state'; add it to the request or pass --state");
+    match body.get("state") {
+        None | Some(Value::Null) => {
+            bail!("request has no 'state'; add it to the request or pass --state")
+        }
+        Some(_) => {}
     }
     Ok(())
+}
+
+/// Ensure the pinned default model is present before sending. Templates and
+/// per-line request bodies may omit `model`; the API requires it.
+pub fn ensure_model(body: &mut Value) {
+    if body.get("model").and_then(Value::as_str).is_none() {
+        body["model"] = Value::String(crate::api::DEFAULT_MODEL.to_string());
+    }
 }
 
 pub fn validate_questions(body: &Value, label: &str) -> Result<()> {
@@ -481,6 +492,16 @@ mod tests {
         validate_questions(&body.clone(), "req").ok();
         apply_params(&mut body, &[("a".into(), Value::String("x".into()))]).unwrap();
         assert_eq!(body["state"]["tags"][0], "x");
+    }
+
+    #[test]
+    fn ensure_model_injects_default_only_when_missing() {
+        let mut body = json!({"state": "x", "questions": {}});
+        ensure_model(&mut body);
+        assert_eq!(body["model"], "jev-latest");
+        let mut body = json!({"state": "x", "model": "custom-model", "questions": {}});
+        ensure_model(&mut body);
+        assert_eq!(body["model"], "custom-model");
     }
 
     #[test]
