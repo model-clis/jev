@@ -50,6 +50,8 @@ curl -fsSL https://raw.githubusercontent.com/model-clis/jev/main/scripts/install
 jev login
 ```
 
+key 存储在 `~/model-clis/jev/credentials.json`（Unix 上权限 `600`）。CI、容器等无终端的自动化场景请改用 `JEV_API_KEY` 环境变量——它优先于已存储的凭据。`JEV_API_BASE` 可覆盖 API 端点（默认 `https://api.typesafe.ai`），仅用于测试与代理；日常使用无需设置。
+
 单问快捷命令（答案 id 固定为 `q`；state 来自 `--state` 或 stdin）：
 
 ```sh

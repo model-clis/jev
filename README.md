@@ -50,6 +50,8 @@ Configure the TypeSafe API key privately in your own terminal—never paste it i
 jev login
 ```
 
+The key is stored at `~/model-clis/jev/credentials.json` (mode `600` on Unix). For CI, containers, and other headless automation, set the `JEV_API_KEY` environment variable instead — it takes precedence over the stored credentials. `JEV_API_BASE` overrides the API endpoint (default `https://api.typesafe.ai`) and exists for testing and proxies; everyday use never needs it.
+
 One-question shortcuts (the single answer id is `q`; state comes from `--state` or stdin):
 
 ```sh

@@ -19,7 +19,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
-    /// Verify and store the TypeSafe API key.
+    /// Verify and store the TypeSafe API key, or set JEV_API_KEY instead.
     Login,
     /// Delete the stored TypeSafe API key.
     Logout,

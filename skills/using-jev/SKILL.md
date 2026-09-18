@@ -95,4 +95,4 @@ jev map --preset triage --in issues.jsonl --out triaged.jsonl --concurrency 8
 
 ## Availability and authentication
 
-Invoke directly; the CLI prints actionable errors. If authentication fails, ask the user to run `jev login` in their own terminal. Never ask them to paste an API key into the conversation. Rate limits (roughly 20 requests/second) are handled with retries and backoff; keep `--concurrency` at or below 8.
+Invoke directly; the CLI prints actionable errors. Authentication comes from the `JEV_API_KEY` environment variable when set (common in CI and containers), otherwise from credentials stored by `jev login`. If authentication fails, ask the user to run `jev login` in their own terminal. Never ask them to paste an API key into the conversation. Rate limits (roughly 20 requests/second) are handled with retries and backoff; keep `--concurrency` at or below 8.
