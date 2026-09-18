@@ -1,6 +1,6 @@
 [package]
 name = "jev-cli"
-version = "2026.918.0"
+version = "2026.919.0"
 edition = "2024"
 rust-version = "1.89"
 license = "MIT"
